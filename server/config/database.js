@@ -3,25 +3,15 @@
 import pg from "pg";
 
 const dbUrl = process.env.DATABASE_URL || "";
-
-// Determine SSL: if the URL explicitly says sslmode=disable or uses
-// Railway's internal network (.railway.internal), skip SSL.
-// Otherwise enable SSL in production with rejectUnauthorized: false.
-const isInternal = dbUrl.includes(".railway.internal");
-const sslDisabled = dbUrl.includes("sslmode=disable");
 const isProduction = process.env.NODE_ENV === "production";
-
-let sslConfig = false;
-if (isProduction && !isInternal && !sslDisabled) {
-  sslConfig = { rejectUnauthorized: false };
-}
+const sslDisabled = dbUrl.includes("sslmode=disable");
 
 const pool = new pg.Pool({
   connectionString: dbUrl,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-  ssl: sslConfig,
+  ssl: isProduction && !sslDisabled ? { rejectUnauthorized: false } : false,
 });
 
 pool.on("error", (err) => {
