@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a211d">
+<title>Gallery — CrewCam</title>
+<link rel="stylesheet" href="/booth/assets/booth-base.css">
+<style>
+body{overflow:auto;min-height:100vh;
+  background:radial-gradient(120% 90% at 50% -10%,#16413a,var(--bg-dark) 40%,var(--bg-darker) 100%)}
+
+.gallery-header{display:flex;align-items:center;justify-content:space-between;padding:30px 32px 18px;flex-wrap:wrap;gap:14px}
+.gallery-header .left{display:flex;align-items:center;gap:14px}
+.gallery-header .title{font-family:'Archivo',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase;letter-spacing:-.01em}
+.gallery-header .title em{font-style:normal;color:var(--brand-primary)}
+.gallery-header .count{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.16em;color:var(--mute);text-transform:uppercase}
+
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;padding:0 32px 32px}
+
+.gallery-card{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line);
+  background:var(--card);cursor:pointer;transition:transform .16s,box-shadow .16s}
+.gallery-card:hover{transform:translateY(-4px);box-shadow:0 18px 50px rgba(0,0,0,.4)}
+.gallery-card img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block}
+.gallery-card .cap{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;
+  background:linear-gradient(180deg,transparent,rgba(6,18,14,.88))}
+.gallery-card .theme{font-family:'Archivo',sans-serif;font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:.02em}
+.gallery-card .time{font-family:'Space Mono',monospace;font-size:10px;color:var(--mute);margin-top:2px}
+
+.load-more{display:flex;justify-content:center;padding:24px 32px 48px}
+.loading-indicator{text-align:center;padding:32px;color:var(--mute)}
+
+.gallery-footer{text-align:center;padding:24px 32px 48px;color:var(--mute);font-size:13px}
+.gallery-footer a{color:var(--brand-primary);text-decoration:none}
+
+.empty-gallery{text-align:center;padding:80px 32px;color:var(--mute)}
+.empty-gallery .heading{font-size:32px;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<div class="gallery-header">
+  <div class="left">
+    <img data-brand="logo" class="brand-logo" style="display:none" alt="">
+    <div>
+      <div class="title" data-brand="event-name">Photo <em>Gallery</em></div>
+    </div>
+  </div>
+  <div class="count"><span id="totalCount">—</span> photos</div>
+</div>
+
+<div class="gallery-grid" id="grid"></div>
+
+<div class="load-more" id="loadMore" style="display:none">
+  <button class="btn ghost small" onclick="loadNextPage()">Load More</button>
+</div>
+
+<div class="loading-indicator" id="loading" style="display:none">
+  <div class="spinner" style="margin:0 auto"></div>
+  <p style="margin-top:10px">Loading photos…</p>
+</div>
+
+<div class="gallery-footer">
+  <span data-brand="footer">Powered by CrewCam</span>
+</div>
+
+<script src="/booth/assets/theme-loader.js"></script>
+<script>
+const CC = window.__crewcam;
+const PAGE_SIZE = 24;
+let offset = 0;
+let total = 0;
+let loading = false;
+
+function esc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+
+function timeAgo(dateStr){
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if(diff < 60) return "just now";
+  if(diff < 3600) return Math.floor(diff / 60) + "m ago";
+  if(diff < 86400) return Math.floor(diff / 3600) + "h ago";
+  return Math.floor(diff / 86400) + "d ago";
+}
+
+async function loadPhotos(append){
+  if(loading) return;
+  loading = true;
+  document.getElementById("loading").style.display = "block";
+
+  try {
+    const slug = CC.slug;
+    const res = await fetch(`/api/gallery/${slug}/photos?limit=${PAGE_SIZE}&offset=${offset}`);
+    if(!res.ok) throw new Error("Failed to load");
+    const data = await res.json();
+
+    total = data.total;
+    document.getElementById("totalCount").textContent = total;
+
+    const grid = document.getElementById("grid");
+
+    if(!append && !data.photos.length){
+      grid.innerHTML = '<div class="empty-gallery"><div class="heading">No photos yet</div><p>Check back once the event is underway.</p></div>';
+      document.getElementById("loading").style.display = "none";
+      loading = false;
+      return;
+    }
+
+    const html = data.photos.map(p => {
+      const url = p.thumbnail_url || p.rendered_url || "";
+      return `<a class="gallery-card" href="/photo/${esc(p.share_code)}">
+        <img src="${esc(url)}" alt="" loading="lazy">
+        <div class="cap">
+          <div class="theme">${esc(p.theme_name || "")}</div>
+          <div class="time">${timeAgo(p.created_at)}</div>
+        </div>
+      </a>`;
+    }).join("");
+
+    if(append){
+      grid.insertAdjacentHTML("beforeend", html);
+    } else {
+      grid.innerHTML = html;
+    }
+
+    offset += data.photos.length;
+
+    // Show/hide load more
+    document.getElementById("loadMore").style.display = data.hasMore ? "flex" : "none";
+  } catch(e){
+    console.error("[gallery] load error:", e);
+  }
+
+  document.getElementById("loading").style.display = "none";
+  loading = false;
+}
+
+function loadNextPage(){ loadPhotos(true); }
+
+// Infinite scroll
+let scrollTimer = null;
+window.addEventListener("scroll", () => {
+  if(scrollTimer) return;
+  scrollTimer = setTimeout(() => {
+    scrollTimer = null;
+    const distFromBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+    if(distFromBottom < 400 && offset < total && !loading){
+      loadPhotos(true);
+    }
+  }, 150);
+});
+
+// Init — load first page once config is ready (or on error, try anyway)
+document.addEventListener("crewcam:config", () => loadPhotos(false));
+document.addEventListener("crewcam:config-error", () => loadPhotos(false));
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+/* booth-base.css — Brand-injectable base styles for all booth pages.
+   CSS custom properties are set dynamically by theme-loader.js from the event's branding config.
+   Default values provide a usable fallback if branding hasn't loaded yet. */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  /* Brand colors — overwritten by theme-loader.js */
+  --brand-primary: #1fc0da;
+  --brand-secondary: #00a1ad;
+  --bg-dark: #11322c;
+  --bg-darker: #0a211d;
+  --ink: #eaf6f4;
+  --mute: rgba(234, 246, 244, 0.62);
+  --line: rgba(31, 192, 218, 0.22);
+  --card: rgba(255, 255, 255, 0.045);
+  --orange: #f69b3c;
+
+  /* Layout */
+  --stage-max: 1240px;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--ink);
+  background: radial-gradient(120% 90% at 50% -10%, #16413a 0%, var(--bg-dark) 40%, var(--bg-darker) 100%);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Typography ── */
+.eyebrow {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  color: var(--brand-primary);
+  text-transform: uppercase;
+}
+
+.heading {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: clamp(26px, 3.6vw, 46px);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.heading em { font-style: normal; color: var(--orange); }
+
+.mono {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--mute);
+  text-transform: uppercase;
+}
+
+/* ── Buttons ── */
+.btn {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font-family: 'Archivo', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bg-darker);
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+  padding: 18px 40px;
+  border-radius: 999px;
+  font-size: clamp(15px, 1.7vw, 19px);
+  box-shadow: 0 14px 40px rgba(31, 192, 218, 0.32);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn:active { transform: translateY(2px) scale(0.99); }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+.btn.small { padding: 10px 20px; font-size: 14px; }
+.btn.pulse { animation: pulse 2.6s ease-in-out infinite; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 14px 40px rgba(31, 192, 218, 0.32); }
+  50% { box-shadow: 0 14px 64px rgba(31, 192, 218, 0.6); }
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 18px;
+}
+
+.card h2 {
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+  margin-bottom: 14px;
+}
+
+/* ── Status indicators ── */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.ok { background: #41d18a; box-shadow: 0 0 10px #41d18a; }
+.status-dot.err { background: #e74c3c; box-shadow: 0 0 10px #e74c3c; }
+.status-dot.wait { background: var(--orange); box-shadow: 0 0 10px var(--orange); }
+
+/* ── Photo grid ── */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.photo-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-darker);
+}
+
+.photo-card img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-card .meta {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.photo-card .meta .name { font-weight: 700; }
+.photo-card .meta .theme-name { color: var(--mute); font-size: 11px; }
+
+/* ── Loading spinner ── */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Branding logo ── */
+.brand-logo {
+  max-height: 40px;
+  max-width: 200px;
+  display: block;
+}
+
+/* ── Utility ── */
+.hidden { display: none !important; }
+.text-mute { color: var(--mute); }
+.text-center { text-align: center; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.gap-sm { gap: 8px; }
+.gap-md { gap: 14px; }
+.gap-lg { gap: 24px; }

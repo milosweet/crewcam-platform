@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a211d">
+<title>Your Photo — CrewCam</title>
+<link rel="stylesheet" href="/booth/assets/booth-base.css">
+<style>
+body{overflow:auto;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(120% 90% at 50% -10%,#16413a,var(--bg-dark) 40%,var(--bg-darker) 100%);
+  padding:32px}
+
+.photo-page{max-width:600px;width:100%;display:flex;flex-direction:column;align-items:center;gap:24px}
+
+.photo-frame{width:100%;border-radius:20px;overflow:hidden;border:1px solid var(--line);
+  box-shadow:0 40px 100px rgba(0,0,0,.5);background:#04140f}
+.photo-frame img{width:100%;display:block}
+
+.photo-info{text-align:center}
+.photo-info .theme{font-family:'Archivo',sans-serif;font-weight:800;text-transform:uppercase;font-size:16px;
+  letter-spacing:.02em;color:var(--brand-primary)}
+.photo-info .event{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;
+  color:var(--mute);text-transform:uppercase;margin-top:4px}
+.photo-info .time{color:var(--mute);font-size:13px;margin-top:6px}
+
+.actions{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+
+.back-link{margin-top:12px}
+.back-link a{color:var(--brand-primary);font-family:'Space Mono',monospace;font-size:12px;
+  letter-spacing:.1em;text-decoration:none;text-transform:uppercase}
+.back-link a:hover{text-decoration:underline}
+
+.photo-footer{margin-top:auto;padding-top:32px;text-align:center;color:var(--mute);font-size:12px}
+
+.error-state{text-align:center;padding:60px 24px;color:var(--mute)}
+.error-state .heading{font-size:28px;margin-bottom:10px}
+</style>
+
+<!-- Open Graph tags for social sharing — populated by JS -->
+<meta property="og:type" content="website">
+<meta property="og:title" id="ogTitle" content="My CrewCam Photo">
+<meta property="og:image" id="ogImage" content="">
+</head>
+<body>
+
+<div class="photo-page" id="photoPage" style="display:none">
+  <div class="photo-frame">
+    <img id="photoImg" alt="Your AI-generated photo">
+  </div>
+
+  <div class="photo-info">
+    <div class="theme" id="photoTheme"></div>
+    <div class="event" id="photoEvent"></div>
+    <div class="time" id="photoTime"></div>
+  </div>
+
+  <div class="actions">
+    <a id="downloadBtn" class="btn" download>Download Photo</a>
+    <button class="btn ghost small" onclick="sharePhoto()">Share</button>
+  </div>
+
+  <div class="back-link" id="backLink" style="display:none">
+    <a id="galleryLink" href="#">← View Gallery</a>
+  </div>
+</div>
+
+<div class="error-state" id="errorState" style="display:none">
+  <div class="heading">Photo Not Found</div>
+  <p>This photo may have been removed or the link is invalid.</p>
+</div>
+
+<div class="photo-footer">
+  <span data-brand="footer">Powered by CrewCam</span>
+</div>
+
+<script>
+// No theme-loader here — this page reads its own share code from the URL
+// and fetches photo data directly (it's cross-event, not slug-scoped).
+
+const shareCode = window.location.pathname.split("/").filter(Boolean).pop();
+let photoData = null;
+
+async function loadPhoto(){
+  try {
+    const res = await fetch(`/api/photo/${encodeURIComponent(shareCode)}`);
+    if(!res.ok) throw new Error("Not found");
+    const data = await res.json();
+    photoData = data;
+    render(data);
+  } catch(e){
+    document.getElementById("errorState").style.display = "block";
+  }
+}
+
+function render(data){
+  const p = data.photo;
+  const b = data.branding || {};
+
+  // Apply branding colors
+  const root = document.documentElement.style;
+  if(b.primary_color) root.setProperty("--brand-primary", b.primary_color);
+  if(b.secondary_color) root.setProperty("--brand-secondary", b.secondary_color);
+
+  // Photo
+  document.getElementById("photoImg").src = p.rendered_url || "";
+  document.getElementById("photoTheme").textContent = p.theme_name || "";
+  document.getElementById("photoEvent").textContent = p.event_name || "";
+  document.getElementById("photoTime").textContent = formatDate(p.created_at);
+
+  // Download link
+  document.getElementById("downloadBtn").href = `/api/photo/${encodeURIComponent(p.share_code)}/download`;
+
+  // Gallery link
+  if(p.event_slug){
+    const link = document.getElementById("galleryLink");
+    link.href = `/gallery/${p.event_slug}`;
+    document.getElementById("backLink").style.display = "block";
+  }
+
+  // OG tags (won't help server-side rendering but good for JS-based scrapers)
+  document.getElementById("ogTitle").content = `${p.theme_name || "Photo"} — ${p.event_name || "CrewCam"}`;
+  document.getElementById("ogImage").content = p.rendered_url || "";
+  document.title = `${p.theme_name || "Photo"} — ${p.event_name || "CrewCam"}`;
+
+  document.getElementById("photoPage").style.display = "flex";
+}
+
+function formatDate(dateStr){
+  try {
+    return new Date(dateStr).toLocaleDateString(undefined, {
+      year: "numeric", month: "long", day: "numeric",
+      hour: "2-digit", minute: "2-digit"
+    });
+  } catch(e){ return ""; }
+}
+
+async function sharePhoto(){
+  if(!photoData) return;
+  const url = window.location.href;
+  if(navigator.share){
+    try {
+      await navigator.share({ title: "My CrewCam Photo", url });
+      return;
+    } catch(e){ /* user cancelled or not supported */ }
+  }
+  // Fallback: copy to clipboard
+  try {
+    await navigator.clipboard.writeText(url);
+    alert("Link copied to clipboard!");
+  } catch(e){
+    prompt("Copy this link:", url);
+  }
+}
+
+loadPhoto();
+</script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a211d">
+<title>CrewCam — Photo Wall</title>
+<link rel="stylesheet" href="/booth/assets/booth-base.css">
+<style>
+body{display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;justify-content:space-between;padding:30px 44px 18px;z-index:3;flex:none}
+.lock{display:flex;align-items:center;gap:18px}
+.titles .eyebrow{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.3em;color:var(--brand-primary);text-transform:uppercase}
+.titles h1{font-family:Archivo,sans-serif;font-weight:900;font-size:40px;line-height:.9;text-transform:uppercase;letter-spacing:-.01em}
+.titles h1 em{font-style:normal;color:var(--brand-secondary)}
+.count{text-align:right}
+.count .n{font-family:Archivo,sans-serif;font-weight:900;font-size:54px;line-height:.9;color:#fff}
+.count .l{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.2em;color:var(--mute);text-transform:uppercase}
+.wall{position:relative;flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;padding:0 44px;overflow:hidden;
+  -webkit-mask:linear-gradient(180deg,transparent,#000 7%,#000 88%,transparent);mask:linear-gradient(180deg,transparent,#000 7%,#000 88%,transparent)}
+.col{display:flex;flex-direction:column;gap:18px;will-change:transform}
+.col.up{animation:scrollup var(--dur,40s) linear infinite}
+@keyframes scrollup{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+.card{border-radius:16px;overflow:hidden;border:1px solid var(--line);position:relative;background:var(--card);flex:none}
+.card img{width:100%;height:auto;display:block;aspect-ratio:3/4;object-fit:cover}
+.card .cap{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;
+  background:linear-gradient(180deg,transparent,rgba(6,18,14,.88));display:flex;justify-content:space-between;align-items:flex-end;gap:8px}
+.card .st{font-family:Archivo,sans-serif;font-weight:800;text-transform:uppercase;font-size:13px;letter-spacing:.02em}
+.card .nm{font-family:'Space Mono',monospace;font-size:10px;color:var(--brand-primary);letter-spacing:.08em}
+.card.placeholder{aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:13px}
+footer{flex:none;display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;z-index:3}
+.cta{font-family:Archivo,sans-serif;font-weight:900;text-transform:uppercase;font-size:22px;letter-spacing:.04em}
+.cta em{font-style:normal;color:var(--brand-primary)}
+.arrow{color:var(--orange);animation:nudge 1.6s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(8px)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="lock">
+    <img data-brand="logo" class="brand-logo" style="height:50px;display:none" alt="">
+    <div class="titles">
+      <div class="eyebrow" data-brand="heading">CrewCam</div>
+      <h1 data-brand="event-name">Photo <em>Wall</em></h1>
+    </div>
+  </div>
+  <div class="count"><div class="n" id="count">—</div><div class="l" id="countLabel">photos taken</div></div>
+</header>
+
+<div class="wall" id="wall"></div>
+
+<footer><div class="cta" data-brand="subheading">Visit the booth <span class="arrow">→</span> <em>get your photo</em></div></footer>
+
+<script src="/booth/assets/theme-loader.js"></script>
+<script>
+const COLS = 4;
+const REFRESH_MS = 8000;
+const CC = window.__crewcam;
+const wall = document.getElementById("wall");
+let photos = [];
+
+// Build the scrolling column grid
+function buildWall(){
+  wall.innerHTML = "";
+  const speeds = [38, 44, 36, 42]; // varied scroll speeds
+  for(let i = 0; i < COLS; i++){
+    const col = document.createElement("div");
+    col.className = "col up";
+    col.style.setProperty("--dur", speeds[i] + "s");
+    col.id = "col" + i;
+    wall.appendChild(col);
+  }
+}
+
+function renderCards(){
+  if(!photos.length){
+    // Show placeholders
+    for(let i = 0; i < COLS; i++){
+      const col = document.getElementById("col" + i);
+      col.innerHTML = "";
+      for(let j = 0; j < 4; j++){
+        const c = document.createElement("div");
+        c.className = "card placeholder";
+        c.textContent = "Waiting for photos…";
+        col.appendChild(c);
+      }
+      // Duplicate for seamless scroll
+      col.innerHTML += col.innerHTML;
+    }
+    return;
+  }
+
+  // Distribute photos across columns
+  const buckets = Array.from({length: COLS}, () => []);
+  photos.forEach((p, i) => buckets[i % COLS].push(p));
+
+  for(let i = 0; i < COLS; i++){
+    const col = document.getElementById("col" + i);
+    const items = buckets[i].length ? buckets[i] : [{placeholder: true}];
+    let html = "";
+    items.forEach(p => {
+      if(p.placeholder){
+        html += '<div class="card placeholder">Waiting for photos…</div>';
+      } else {
+        const url = p.thumbnail_url || p.rendered_url || "";
+        const theme = p.theme_name || "";
+        html += `<div class="card"><img src="${esc(url)}" alt="" loading="lazy"><div class="cap"><div><div class="st">${esc(theme)}</div></div></div></div>`;
+      }
+    });
+    // Duplicate content for seamless infinite scroll
+    col.innerHTML = html + html;
+  }
+}
+
+async function refresh(){
+  try {
+    const url = CC.apiUrl("/photos?limit=100");
+    const headers = CC.headers();
+    delete headers["Content-Type"];
+    const res = await fetch(url, { headers });
+    if(!res.ok) return;
+    const data = await res.json();
+    const done = (data.photos || []).filter(p => p.status === "done" && p.rendered_url);
+    if(JSON.stringify(done.map(p=>p.id)) !== JSON.stringify(photos.map(p=>p.id))){
+      photos = done;
+      renderCards();
+    }
+    document.getElementById("count").textContent = data.total || done.length || "—";
+  } catch(e){
+    console.warn("[attractor] refresh error:", e);
+  }
+}
+
+function esc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+
+// Init
+buildWall();
+renderCards();
+
+document.addEventListener("crewcam:config", () => {
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+});
+
+document.addEventListener("crewcam:config-error", () => {
+  // Still try to refresh in case config isn't required for photo list
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+});
+</script>
+</body>
+</html>

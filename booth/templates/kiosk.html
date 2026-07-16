@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a211d">
+<title>CrewCam — Kiosk</title>
+<link rel="stylesheet" href="/booth/assets/booth-base.css">
+<style>
+.app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:18px}
+.stage{position:relative;width:100%;max-width:var(--stage-max);aspect-ratio:16/10;max-height:100%;
+  border-radius:26px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(0,94,167,.10),rgba(10,33,29,0) 46%),
+    radial-gradient(140% 120% at 50% 120%,rgba(0,161,173,.18),transparent 60%);
+  border:1px solid var(--line);box-shadow:0 40px 120px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06)}
+
+/* screens */
+.screen{position:absolute;inset:0;z-index:2;display:none;flex-direction:column;
+  padding:clamp(20px,3.4vw,46px);padding-top:calc(clamp(20px,3.4vw,46px) + env(safe-area-inset-top,0px));
+  animation:fade .5s ease both}
+.screen.on{display:flex}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* topbar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:14px;z-index:3}
+.brand{height:26px;opacity:.9}
+.brand img{height:100%;display:block}
+.tag{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--mute);text-transform:uppercase}
+
+/* attract screen */
+#attract{align-items:center;justify-content:center;text-align:center;gap:6px}
+#attract .sub{max-width:560px;color:var(--mute);font-size:clamp(13px,1.5vw,17px);margin-top:14px;line-height:1.5}
+.startbtn{margin-top:30px}
+
+/* theme cards */
+.body{display:flex;flex-direction:column;flex:1;min-height:0;justify-content:center}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:auto;margin-bottom:auto}
+.tcard{position:relative;border-radius:18px;overflow:hidden;cursor:pointer;min-height:clamp(120px,17vh,180px);
+  border:1px solid var(--line);background:var(--card);padding:18px;display:flex;flex-direction:column;justify-content:flex-end;
+  transition:transform .16s,border-color .16s,box-shadow .16s}
+.tcard:active{transform:scale(.98)}
+.tcard.sel{border-color:var(--brand-primary);box-shadow:0 0 0 2px var(--brand-primary),0 18px 50px rgba(31,192,218,.28)}
+.tcard h3{font-family:'Archivo',sans-serif;font-weight:800;text-transform:uppercase;font-size:clamp(15px,1.7vw,20px);letter-spacing:.01em}
+.tcard p{color:var(--mute);font-size:12.5px;margin-top:3px;line-height:1.35}
+
+/* capture */
+.capwrap{display:flex;gap:26px;flex:1;min-height:0;align-items:center}
+.viewport{position:relative;aspect-ratio:3/4;height:min(56vh,440px);border-radius:20px;overflow:hidden;
+  background:#04140f;border:1px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center}
+.viewport video,.viewport img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.viewport video.cam-inverted{transform:scaleY(-1)}
+.viewport .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--mute);text-align:center;font-size:13px;padding:24px}
+.guide{position:absolute;inset:14%;border:2px dashed rgba(31,192,218,.5);border-radius:50%;pointer-events:none}
+.guide.locked{border-color:var(--brand-primary);box-shadow:0 0 0 9999px rgba(6,35,31,.25)}
+.countdown{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none;z-index:5}
+.countdown.on{display:flex}
+.countdown .num{font-family:'Archivo',sans-serif;font-weight:900;font-size:clamp(80px,18vw,160px);color:#fff;
+  text-shadow:0 6px 30px rgba(0,0,0,.6);line-height:1;animation:cdpop .9s ease}
+@keyframes cdpop{from{transform:scale(1.4);opacity:.2}to{transform:scale(1);opacity:1}}
+.cap-side{flex:1;min-width:0}
+.cap-side .heading{font-size:clamp(24px,3vw,40px)}
+.shutter{width:84px;height:84px;border-radius:50%;border:5px solid var(--brand-primary);background:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:transform .1s}
+.shutter:active{transform:scale(.92)}
+.shutter span{width:62px;height:62px;border-radius:50%;background:var(--brand-primary)}
+.cap-actions{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:22px;flex-wrap:wrap}
+#reviewImg{transform:none !important}
+.nav-row{display:flex;gap:14px;margin-top:auto;padding-top:18px}
+
+/* generating */
+.gen{flex:1;display:flex;gap:26px;min-height:0}
+.gen-left{flex:none;width:34%;display:flex;flex-direction:column;gap:16px}
+.you{aspect-ratio:1/1;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:#04140f;position:relative}
+.you img{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.you .stamp{position:absolute;left:10px;bottom:10px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;
+  background:rgba(6,35,31,.7);border:1px solid var(--line);padding:4px 8px;border-radius:6px;text-transform:uppercase}
+.meter{font-family:'Space Mono',monospace;font-size:12px;color:var(--mute)}
+.meter b{color:var(--brand-primary)}
+.bar{height:6px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand-secondary),var(--brand-primary));transition:width .4s}
+.gen-right{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* result */
+.result-wrap{flex:1;display:flex;gap:26px;min-height:0;align-items:center;justify-content:center}
+.result-photo{max-height:70vh;max-width:60%;border-radius:20px;border:1px solid var(--line);object-fit:contain}
+.result-side{display:flex;flex-direction:column;gap:14px;align-items:center}
+.qrbox{display:flex;align-items:center;gap:16px;border:1px solid var(--line);border-radius:16px;padding:12px 16px;background:var(--card)}
+.qr{width:104px;height:104px;border-radius:10px;background:#fff;padding:7px;flex:none;display:flex;align-items:center;justify-content:center}
+.qr img{width:100%!important;height:100%!important;display:block}
+
+/* startover */
+.startover{position:absolute;bottom:clamp(16px,2.4vw,30px);right:clamp(16px,2.4vw,30px);z-index:40}
+
+/* toast */
+.toast{position:absolute;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);z-index:30;
+  background:#06231f;border:1px solid var(--brand-primary);color:var(--ink);padding:12px 22px;border-radius:999px;
+  font-size:13px;font-weight:600;opacity:0;transition:.3s}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* responsive */
+@media (max-width:760px){
+  .stage{aspect-ratio:auto;height:100%;border-radius:18px}
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .capwrap,.gen{flex-direction:column;overflow:auto}
+  .viewport{height:34vh}
+  .gen-left{width:100%;flex-direction:row}
+  .you{width:120px}
+}
+@media (orientation:portrait){
+  .app{padding:12px}
+  .stage{aspect-ratio:auto;height:100%;width:100%;border-radius:20px}
+  .grid{grid-template-columns:repeat(2,1fr);gap:14px}
+  .capwrap{flex-direction:column;align-items:center;gap:18px;overflow:auto}
+  .viewport{height:min(52vh,460px);width:auto;max-width:94vw;margin:0 auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="stage">
+
+<!-- ──── Attract ──── -->
+<div class="screen on" id="attract">
+  <div class="top">
+    <div class="brand"><img data-brand="logo" style="display:none" alt=""></div>
+    <div class="tag" data-brand="event-name">CrewCam</div>
+  </div>
+  <div class="eyebrow" data-brand="heading">AI Photobooth</div>
+  <div class="heading">Step Up &amp; <em>Strike a Pose</em></div>
+  <div class="sub" data-brand="subheading">Get an AI-generated photo in seconds. Pick a theme and let the magic happen.</div>
+  <button class="btn pulse startbtn" onclick="go('themes')">Start</button>
+</div>
+
+<!-- ──── Theme Selection ──── -->
+<div class="screen" id="themes">
+  <div class="top">
+    <div class="brand"><img data-brand="logo" style="display:none" alt=""></div>
+    <div class="tag" data-brand="event-name">CrewCam</div>
+  </div>
+  <div class="eyebrow">Choose Your Scene</div>
+  <div class="heading">Pick a <em>Theme</em></div>
+  <div class="body">
+    <div class="grid" id="themeGrid"></div>
+    <div class="nav-row">
+      <button class="btn ghost" onclick="go('attract')">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ──── Capture ──── -->
+<div class="screen" id="capture">
+  <div class="top">
+    <div class="brand"><img data-brand="logo" style="display:none" alt=""></div>
+    <div class="tag" id="capThemeName"></div>
+  </div>
+  <div class="capwrap">
+    <div class="viewport" id="viewport">
+      <div class="ph" id="vpPlaceholder">Starting camera…</div>
+      <div class="guide" id="guide" style="display:none"></div>
+      <div class="countdown" id="countdown"><div class="num" id="cdNum"></div></div>
+    </div>
+    <div class="cap-side">
+      <div class="eyebrow">Get Ready</div>
+      <div class="heading">Strike a <em>Pose</em></div>
+      <p class="text-mute" style="margin-top:10px">Look at the camera. We'll capture your headshot and transform it.</p>
+      <div class="cap-actions">
+        <div class="shutter" onclick="doCapture()"><span></span></div>
+      </div>
+      <div class="nav-row">
+        <button class="btn ghost small" onclick="cancelCapture()">← Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ──── Review ──── -->
+<div class="screen" id="review">
+  <div class="top">
+    <div class="brand"><img data-brand="logo" style="display:none" alt=""></div>
+    <div class="tag">Review</div>
+  </div>
+  <div class="capwrap">
+    <div class="viewport">
+      <img id="reviewImg" alt="Your photo">
+    </div>
+    <div class="cap-side">
+      <div class="eyebrow">Looking Good?</div>
+      <div class="heading">Confirm Your <em>Photo</em></div>
+      <div class="cap-actions">
+        <button class="btn" onclick="confirmPhoto()">Use This Photo</button>
+        <button class="btn ghost small" onclick="retakePhoto()">Retake</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ──── Generating ──── -->
+<div class="screen" id="generating">
+  <div class="top">
+    <div class="brand"><img data-brand="logo" style="display:none" alt=""></div>
+    <div class="tag">Creating your photo…</div>
+  </div>
+  <div class="gen">
+    <div class="gen-left">
+      <div class="you" id="genYou"></div>
+      <div>
+        <div class="meter">Rendering… <b id="genPercent">0%</b></div>
+        <div class="bar"><i id="genBar"></i></div>
+      </div>
+    </div>
+    <div class="gen-right">
+      <div class="eyebrow">AI at Work</div>
+      <div class="heading">Creating Your <em>Scene</em></div>
+      <p class="text-mute" style="margin-top:10px">Our AI is compositing your photo into the scene. This usually takes 10–20 seconds.</p>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <div class="spinner" style="width:60px;height:60px;border-width:4px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ──── Result ──── -->
+<div class="screen" id="result">
+  <div class="top">
+    <div class="brand"><img data-brand="logo" style="display:none" alt=""></div>
+    <div class="tag" data-brand="event-name">CrewCam</div>
+  </div>
+  <div class="result-wrap">
+    <img id="resultImg" class="result-photo" alt="Your AI photo">
+    <div class="result-side">
+      <div class="eyebrow">Your Photo Is Ready</div>
+      <div class="heading" style="font-size:28px">Looks <em>Amazing</em></div>
+      <div class="qrbox" id="qrBox" style="display:none">
+        <div class="qr"><img id="qrImg" alt="QR Code"></div>
+        <div>
+          <div style="font-family:Archivo,sans-serif;font-weight:800;text-transform:uppercase;font-size:15px">Scan to Download</div>
+          <div class="text-mute" style="font-size:12.5px;margin-top:3px">Point your phone camera at this code</div>
+        </div>
+      </div>
+      <button class="btn" onclick="startOver()" style="margin-top:14px">Take Another</button>
+    </div>
+  </div>
+</div>
+
+<button class="btn ghost small startover" onclick="startOver()">Start Over</button>
+</div><!-- /stage -->
+</div><!-- /app -->
+
+<script src="/booth/assets/theme-loader.js"></script>
+<script src="/booth/assets/booth-client.js"></script>
+<script>
+const CC = window.__crewcam;
+const { showScreen, toast, esc } = CC.ui;
+const COUNTDOWN_SECONDS = 3;
+
+let state = { theme: null, face: null, photoId: null };
+
+// ── Navigation ──
+function go(screen){
+  showScreen(screen);
+  if(screen === "capture") CC.cam.start(document.getElementById("viewport")).then(v => {
+    if(v) document.getElementById("guide").style.display = "block";
+    else document.getElementById("vpPlaceholder").innerHTML = "Camera unavailable.<br>Please ask staff for help.";
+  });
+}
+
+// ── Theme grid ──
+function buildThemes(themes){
+  const grid = document.getElementById("themeGrid");
+  grid.innerHTML = "";
+  (themes || []).forEach(t => {
+    const card = document.createElement("div");
+    card.className = "tcard" + (t.is_default ? " sel" : "");
+    card.innerHTML = `<h3>${esc(t.name)}</h3>`;
+    card.onclick = () => selectTheme(t, card);
+    grid.appendChild(card);
+  });
+}
+
+function selectTheme(theme, card){
+  state.theme = theme;
+  document.querySelectorAll(".tcard").forEach(c => c.classList.remove("sel"));
+  card.classList.add("sel");
+  document.getElementById("capThemeName").textContent = theme.name;
+  go("capture");
+}
+
+// ── Capture ──
+function doCapture(){
+  const vid = document.getElementById("viewport").querySelector("video");
+  if(!vid){ toast("No camera — please ask staff"); return; }
+
+  // Countdown
+  const cd = document.getElementById("countdown");
+  const num = document.getElementById("cdNum");
+  const guide = document.getElementById("guide");
+  guide.classList.add("locked");
+  cd.classList.add("on");
+
+  let remaining = COUNTDOWN_SECONDS;
+  function tick(){
+    num.textContent = remaining;
+    num.style.animation = "none"; void num.offsetWidth; num.style.animation = "";
+    if(remaining <= 0){
+      cd.classList.remove("on");
+      guide.classList.remove("locked");
+      // Snap
+      state.face = CC.cam.snap(vid, { zoom: 1 });
+      CC.cam.stop(document.getElementById("viewport"));
+      document.getElementById("reviewImg").src = state.face;
+      go("review");
+      return;
+    }
+    remaining--;
+    setTimeout(tick, 1000);
+  }
+  tick();
+}
+
+function cancelCapture(){
+  CC.cam.stop(document.getElementById("viewport"));
+  go("themes");
+}
+
+function retakePhoto(){
+  state.face = null;
+  go("capture");
+}
+
+// ── Submit & Poll ──
+async function confirmPhoto(){
+  go("generating");
+  document.getElementById("genYou").innerHTML = state.face
+    ? `<img src="${state.face}"><div class="stamp">Your headshot</div>` : "";
+  document.getElementById("genBar").style.width = "0%";
+  document.getElementById("genPercent").textContent = "0%";
+
+  try {
+    const themeId = state.theme ? state.theme.id : undefined;
+    const { photo } = await CC.api.submitCapture(state.face, themeId);
+    state.photoId = photo.id;
+
+    // Simulate progress while polling
+    let pct = 10;
+    const pctTimer = setInterval(() => {
+      pct = Math.min(pct + Math.random() * 8, 90);
+      document.getElementById("genBar").style.width = pct + "%";
+      document.getElementById("genPercent").textContent = Math.round(pct) + "%";
+    }, 1500);
+
+    const result = await CC.api.pollStatus(photo.id, (p) => {
+      // Could update UI on each tick if needed
+    });
+
+    clearInterval(pctTimer);
+    document.getElementById("genBar").style.width = "100%";
+    document.getElementById("genPercent").textContent = "100%";
+
+    // Show result
+    document.getElementById("resultImg").src = result.rendered_url || "";
+
+    // QR code
+    if(result.qr_url){
+      document.getElementById("qrBox").style.display = "flex";
+      // Generate QR client-side or use a simple image
+      document.getElementById("qrImg").src =
+        `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(result.qr_url)}`;
+    }
+
+    setTimeout(() => go("result"), 600);
+  } catch(err){
+    toast("Something went wrong: " + err.message);
+    setTimeout(() => go("attract"), 3000);
+  }
+}
+
+function startOver(){
+  state = { theme: null, face: null, photoId: null };
+  document.getElementById("qrBox").style.display = "none";
+  go("attract");
+}
+
+// ── Init ──
+document.addEventListener("crewcam:config", (e) => {
+  const config = e.detail;
+  buildThemes(config.themes || []);
+  // Auto-select default theme
+  const def = (config.themes || []).find(t => t.is_default);
+  if(def) state.theme = def;
+});
+</script>
+</body>
+</html>

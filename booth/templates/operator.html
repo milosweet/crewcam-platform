@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a211d">
+<title>CrewCam — Operator</title>
+<link rel="stylesheet" href="/booth/assets/booth-base.css">
+<style>
+body{overflow:auto;padding:24px;max-width:1400px;margin:0 auto}
+.op-header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:24px;flex-wrap:wrap}
+.op-header .left{display:flex;align-items:center;gap:14px}
+.op-title{font-family:'Archivo',sans-serif;font-weight:900;font-size:24px;text-transform:uppercase}
+.op-title em{font-style:normal;color:var(--brand-primary)}
+
+.stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 22px;min-width:140px}
+.stat-card .n{font-family:'Archivo',sans-serif;font-weight:900;font-size:32px;color:#fff}
+.stat-card .l{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-top:2px}
+
+.controls{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+
+.feed-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.feed-header h2{font-family:'Archivo',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;letter-spacing:.04em;color:var(--brand-primary)}
+
+.photo-grid{grid-template-columns:repeat(auto-fill, minmax(180px, 1fr))}
+.photo-card .status-badge{position:absolute;top:8px;left:8px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.12em;
+  padding:3px 7px;border-radius:5px;font-weight:700;text-transform:uppercase}
+.photo-card .status-badge.done{background:var(--brand-primary);color:var(--bg-darker)}
+.photo-card .status-badge.processing{background:var(--orange);color:#3a2300}
+.photo-card .status-badge.failed{background:#e74c3c;color:#fff}
+.photo-card .meta{display:flex;justify-content:space-between;align-items:center}
+.photo-card .meta .time{color:var(--mute);font-family:'Space Mono',monospace;font-size:10px}
+
+.empty-state{text-align:center;padding:60px 24px;color:var(--mute)}
+.empty-state .heading{font-size:28px;margin-bottom:10px}
+
+.booth-links{margin-top:24px;padding:18px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.booth-links h3{font-family:'Archivo',sans-serif;font-weight:800;text-transform:uppercase;font-size:14px;color:var(--brand-primary);margin-bottom:10px}
+.booth-links .link-row{display:flex;gap:12px;flex-wrap:wrap}
+.booth-links a{font-family:'Space Mono',monospace;font-size:12px;color:var(--brand-primary);word-break:break-all}
+</style>
+</head>
+<body>
+
+<div class="op-header">
+  <div class="left">
+    <img data-brand="logo" class="brand-logo" style="display:none" alt="">
+    <div class="op-title"><em>Operator</em> Dashboard</div>
+  </div>
+  <div>
+    <span class="status-dot ok" id="statusDot"></span>
+    <span class="mono" id="statusLabel" style="margin-left:6px">Connecting…</span>
+  </div>
+</div>
+
+<div class="stats" id="stats">
+  <div class="stat-card"><div class="n" id="statTotal">—</div><div class="l">Total Photos</div></div>
+  <div class="stat-card"><div class="n" id="statDone">—</div><div class="l">Completed</div></div>
+  <div class="stat-card"><div class="n" id="statFailed">—</div><div class="l">Failed</div></div>
+  <div class="stat-card"><div class="n" id="statRate">—</div><div class="l">Per Hour</div></div>
+</div>
+
+<div class="controls">
+  <button class="btn small" onclick="refreshNow()">Refresh</button>
+  <button class="btn ghost small" id="autoRefreshBtn" onclick="toggleAutoRefresh()">Auto-Refresh: On</button>
+</div>
+
+<div class="feed-header">
+  <h2>Recent Photos</h2>
+  <span class="mono" id="lastRefresh">—</span>
+</div>
+
+<div class="photo-grid" id="photoGrid">
+  <div class="empty-state">
+    <div class="heading">No photos yet</div>
+    <p>Photos will appear here as guests use the booth.</p>
+  </div>
+</div>
+
+<div class="booth-links" id="boothLinks" style="display:none">
+  <h3>Booth Links</h3>
+  <div class="link-row" id="linkRow"></div>
+</div>
+
+<script src="/booth/assets/theme-loader.js"></script>
+<script src="/booth/assets/booth-client.js"></script>
+<script>
+const CC = window.__crewcam;
+const { esc, timeAgo } = CC.ui;
+const REFRESH_MS = 5000;
+let autoRefresh = true;
+let refreshTimer = null;
+let allPhotos = [];
+
+async function loadPhotos(){
+  try {
+    const data = await CC.api.fetchPhotos(200, 0);
+    allPhotos = data.photos || [];
+    updateStats(allPhotos, data.total);
+    renderGrid(allPhotos);
+    document.getElementById("statusDot").className = "status-dot ok";
+    document.getElementById("statusLabel").textContent = "Live";
+    document.getElementById("lastRefresh").textContent = "Updated " + new Date().toLocaleTimeString();
+  } catch(e){
+    document.getElementById("statusDot").className = "status-dot err";
+    document.getElementById("statusLabel").textContent = "Error";
+    console.error("[operator] load error:", e);
+  }
+}
+
+function updateStats(photos, total){
+  const done = photos.filter(p => p.status === "done").length;
+  const failed = photos.filter(p => p.status === "failed").length;
+
+  document.getElementById("statTotal").textContent = total || photos.length;
+  document.getElementById("statDone").textContent = done;
+  document.getElementById("statFailed").textContent = failed;
+
+  // Rate: photos in the last hour
+  const hourAgo = Date.now() - 3600000;
+  const recent = photos.filter(p => new Date(p.created_at).getTime() > hourAgo).length;
+  document.getElementById("statRate").textContent = recent;
+}
+
+function renderGrid(photos){
+  const grid = document.getElementById("photoGrid");
+  if(!photos.length){
+    grid.innerHTML = '<div class="empty-state"><div class="heading">No photos yet</div><p>Photos will appear here as guests use the booth.</p></div>';
+    return;
+  }
+
+  grid.innerHTML = photos.map(p => {
+    const imgUrl = p.thumbnail_url || p.rendered_url || "";
+    const badgeClass = p.status === "done" ? "done" : p.status === "failed" ? "failed" : "processing";
+    const imgTag = imgUrl
+      ? `<img src="${esc(imgUrl)}" alt="" loading="lazy">`
+      : `<div style="aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:12px">${p.status === "processing" ? '<div class="spinner"></div>' : esc(p.error_message || p.status)}</div>`;
+
+    return `<div class="photo-card">
+      ${imgTag}
+      <div class="status-badge ${badgeClass}">${esc(p.status)}</div>
+      <div class="meta">
+        <div>
+          <div class="theme-name">${esc(p.theme_name || "—")}</div>
+        </div>
+        <div class="time">${timeAgo(p.created_at)}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function refreshNow(){ loadPhotos(); }
+
+function toggleAutoRefresh(){
+  autoRefresh = !autoRefresh;
+  document.getElementById("autoRefreshBtn").textContent = "Auto-Refresh: " + (autoRefresh ? "On" : "Off");
+  if(autoRefresh) startAutoRefresh();
+  else if(refreshTimer){ clearInterval(refreshTimer); refreshTimer = null; }
+}
+
+function startAutoRefresh(){
+  if(refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(loadPhotos, REFRESH_MS);
+}
+
+function showBoothLinks(){
+  const slug = CC.slug;
+  const key = CC.boothKey;
+  const base = window.location.origin;
+  const links = document.getElementById("boothLinks");
+  links.style.display = "block";
+  document.getElementById("linkRow").innerHTML = [
+    { label: "Attractor", path: "attractor" },
+    { label: "Kiosk", path: "kiosk" },
+    { label: "Operator", path: "operator" },
+  ].map(l => `<a href="${base}/booth/${slug}/${l.path}?key=${encodeURIComponent(key)}" target="_blank">${l.label}: /booth/${esc(slug)}/${l.path}</a>`).join("");
+}
+
+// Init
+document.addEventListener("crewcam:config", () => {
+  loadPhotos();
+  startAutoRefresh();
+  showBoothLinks();
+});
+
+document.addEventListener("crewcam:config-error", () => {
+  // Try loading photos anyway
+  loadPhotos();
+  startAutoRefresh();
+});
+</script>
+</body>
+</html>
